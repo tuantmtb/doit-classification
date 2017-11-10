@@ -1,166 +1,125 @@
-# coding: utf-8
+# -*- coding: utf8 -*-
 
-# In[1]:
-
-# Loading the data set - training data.
-from sklearn.datasets import fetch_20newsgroups
-
-twenty_train = fetch_20newsgroups(subset='train', shuffle=True)
-
-# In[4]:
-
-# You can check the target names (categories) and some data files by following commands.
-print twenty_train.target_names  # prints all the categories
-
-# In[5]:
-
-print("\n".join(twenty_train.data[0].split("\n")[:3]))  # prints first line of the first data file
-
-# In[6]:
-
-# Extracting features from text files
-from sklearn.feature_extraction.text import CountVectorizer
-
-count_vect = CountVectorizer()
-X_train_counts = count_vect.fit_transform(twenty_train.data)
-print X_train_counts.shape
-print 'X_train_counts.shape'
-# In[7]:
-
-# TF-IDF
-from sklearn.feature_extraction.text import TfidfTransformer
-
-tfidf_transformer = TfidfTransformer()
-X_train_tfidf = tfidf_transformer.fit_transform(X_train_counts)
-print X_train_tfidf.shape
-print 'X_train_tfidf.shape'
-# In[9]:
-
-# Machine Learning
-# Training Naive Bayes (NB) classifier on training data.
-from sklearn.naive_bayes import MultinomialNB
-
-clf = MultinomialNB().fit(X_train_tfidf, twenty_train.target)
-print 'done bayes'
-# In[14]:
-
-# Building a pipeline: We can write less code and do all of the above, by building a pipeline as follows:
-# The names ‘vect’ , ‘tfidf’ and ‘clf’ are arbitrary but will be used later.
-# We will be using the 'text_clf' going forward.
+import codecs, os, io
+import re, math
+from pyvi.pyvi import ViTokenizer
+from sklearn.externals import joblib
 from sklearn.pipeline import Pipeline
-
-text_clf = Pipeline([('vect', CountVectorizer()), ('tfidf', TfidfTransformer()), ('clf', MultinomialNB())])
-
-print 'training'
-text_clf = text_clf.fit(twenty_train.data, twenty_train.target)
-# In[15]:
-
-# Performance of NB Classifier
 import numpy as np
 
-twenty_test = fetch_20newsgroups(subset='test', shuffle=True)
-print 'predict'
-predicted = text_clf.predict(twenty_test.data)
-print np.mean(predicted == twenty_test.target)
+folder_train = '/Volumes/DATA/workspace/vnu/spc/git/doit-classification/DataSource/Data_raw/train'
+folder_test = '/Volumes/DATA/workspace/vnu/spc/git/doit-classification/DataSource/Data_raw/test'
 
-# In[16]:
-print 'svm'
-# Training Support Vector Machines - SVM and calculating its performance
+def get_filepaths(directory):
+    file_paths = []  # List which will store all of the full filepaths.
 
-from sklearn.linear_model import SGDClassifier
+    # Walk the tree.
+    for root, directories, files in os.walk(directory):
+        for filename in files:
+            # Join the two strings in order to form the full filepath.
+            filepath = os.path.join(root, filename)
+            if filepath.find('.txt') != -1:
+                file_paths.append(filepath)  # Add it to the list.
 
-text_clf_svm = Pipeline([('vect', CountVectorizer()), ('tfidf', TfidfTransformer()),
-                         ('clf-svm', SGDClassifier(loss='hinge', penalty='l2', alpha=1e-3, n_iter=5, random_state=42))])
-
-text_clf_svm = text_clf_svm.fit(twenty_train.data, twenty_train.target)
-predicted_svm = text_clf_svm.predict(twenty_test.data)
-print np.mean(predicted_svm == twenty_test.target)
-
-# In[18]:
-
-# Grid Search
-# Here, we are creating a list of parameters for which we would like to do performance tuning.
-# All the parameters name start with the classifier name (remember the arbitrary name we gave).
-# E.g. vect__ngram_range; here we are telling to use unigram and bigrams and choose the one which is optimal.
-
-from sklearn.model_selection import GridSearchCV
-
-parameters = {'vect__ngram_range': [(1, 1), (1, 2)], 'tfidf__use_idf': (True, False), 'clf__alpha': (1e-2, 1e-3)}
-
-# In[19]:
-
-# Next, we create an instance of the grid search by passing the classifier, parameters
-# and n_jobs=-1 which tells to use multiple cores from user machine.
-print 'grid search'
-gs_clf = GridSearchCV(text_clf, parameters, n_jobs=-1)
-gs_clf = gs_clf.fit(twenty_train.data, twenty_train.target)
-
-# In[23]:
-
-# To see the best mean score and the params, run the following code
-
-print gs_clf.best_score_
-print gs_clf.best_params_
-
-# Output for above should be: The accuracy has now increased to ~90.6% for the NB classifier (not so naive anymore! 😄)
-# and the corresponding parameters are {‘clf__alpha’: 0.01, ‘tfidf__use_idf’: True, ‘vect__ngram_range’: (1, 2)}.
+    return file_paths  # Self-explanatory.
 
 
-# In[24]:
+def load_dataset(folder):
+    dataset = {'target_names': [], 'data': [], 'target': []}
+    print('loading dataset')
+    for root, dirs, files in os.walk(folder, topdown=False):
+        position = 0
+        for name in dirs:
+            subdir = os.path.join(root, name)
+            dataset['target_names'].append(name)
+            filesPath = get_filepaths(subdir)
+            for filePath in filesPath:
+                with io.open(filePath, mode="r", encoding="UTF8") as file:
+                    content = file.read().lower()
+                    rx = re.compile("[^\W\d_]+", re.UNICODE)
+                    content = " ".join(rx.findall(content))
+                    dataset['data'].append(ViTokenizer.tokenize(content))
+                    dataset['target'].append(position)
+            position += 1
 
-# Similarly doing grid search for SVM
-from sklearn.model_selection import GridSearchCV
-
-parameters_svm = {'vect__ngram_range': [(1, 1), (1, 2)], 'tfidf__use_idf': (True, False),
-                  'clf-svm__alpha': (1e-2, 1e-3)}
-
-gs_clf_svm = GridSearchCV(text_clf_svm, parameters_svm, n_jobs=-1)
-print 'gird search for svm'
-gs_clf_svm = gs_clf_svm.fit(twenty_train.data, twenty_train.target)
-
-print gs_clf_svm.best_score_
-print gs_clf_svm.best_params_
-
-# In[25]:
-
-# NLTK
-# Removing stop words
-from sklearn.pipeline import Pipeline
-print 'stopword'
-text_clf = Pipeline([('vect', CountVectorizer(stop_words='english')), ('tfidf', TfidfTransformer()),
-                     ('clf', MultinomialNB())])
-
-# In[26]:
-
-# Stemming Code
-
-import nltk
-
-nltk.download()
-
-from nltk.stem.snowball import SnowballStemmer
-print 'stemming'
-stemmer = SnowballStemmer("english", ignore_stopwords=True)
+    return dataset, dataset['target_names']
 
 
-class StemmedCountVectorizer(CountVectorizer):
-    def build_analyzer(self):
-        analyzer = super(StemmedCountVectorizer, self).build_analyzer()
-        return lambda doc: ([stemmer.stem(w) for w in analyzer(doc)])
+def train():
+    train_set, target_names = load_dataset(folder_train)
+    joblib.dump(train_set, 'train_set.pkl')
+    print('loaded train_set')
+
+    # Extracting features from text files
+    from sklearn.feature_extraction.text import CountVectorizer
+
+    count_vect = CountVectorizer()
+    X_train_counts = count_vect.fit_transform(train_set['data'])
+    joblib.dump(X_train_counts, 'X_train_counts.pkl')
+    print(X_train_counts.shape)
+
+    # TF-IDF
+    from sklearn.feature_extraction.text import TfidfTransformer
+    tfidf_transformer = TfidfTransformer()
+    X_train_tfidf = tfidf_transformer.fit_transform(X_train_counts)
+    joblib.dump(X_train_tfidf, 'X_train_tfidf.pkl')
+    print('tfidf')
+    print(X_train_tfidf.shape)
+
+    # Training Naive Bayes (NB) classifier on training data.
+    # from sklearn.naive_bayes import MultinomialNB
+    # text_clf = Pipeline([('vect', CountVectorizer()), ('tfidf', TfidfTransformer()), ('clf', MultinomialNB())])
+
+    print('training')
+    # text_clf = text_clf.fit(train_set['data'], train_set['target'])
+    # joblib.dump(text_clf, 'text_clf.pkl')
+
+    # In[16]:
+    print('svm')
+    # Training Support Vector Machines - SVM and calculating its performance
+
+    from sklearn.linear_model import SGDClassifier
+
+    text_clf_svm = Pipeline([('vect', CountVectorizer()), ('tfidf', TfidfTransformer()),
+                             ('clf-svm',
+                              SGDClassifier(loss='hinge', penalty='l2', alpha=1e-3, n_iter=5, random_state=42))])
+
+    text_clf_svm = text_clf_svm.fit(train_set['data'], train_set['target'])
+    joblib.dump(text_clf_svm, 'text_clf_svm.pkl')
+    return target_names
+
+def test():
+    # test_set = load_dataset(folder_test)
+    # joblib.dump(test_set, 'test_set.pkl')
+    print('process test')
+    test_set = joblib.load('test_set.pkl')
+    print('loaded test_set')
+    text_clf_svm = joblib.load('text_clf_svm.pkl')
+    predicted_svm = text_clf_svm.predict(test_set['data'])
+    print(np.mean(predicted_svm == test_set['target']))
 
 
-stemmed_count_vect = StemmedCountVectorizer(stop_words='english')
+def load_text(doc):
+    dataset = {'target_names': [], 'data': [], 'target': []}
+    content = doc.lower()
+    rx = re.compile("[^\W\d_]+", re.UNICODE)
+    content = " ".join(rx.findall(content))
+    dataset['data'].append(ViTokenizer.tokenize(content))
+    return dataset
 
-text_mnb_stemmed = Pipeline([('vect', stemmed_count_vect), ('tfidf', TfidfTransformer()),
-                             ('mnb', MultinomialNB(fit_prior=False))])
+def predict(predict_set):
+    print('process predict')
+    text_clf_svm = joblib.load('text_clf_svm.pkl')
+    # predicted_svm = text_clf_svm.predict_proba(predict_set['data'])
+    predicted_svm = text_clf_svm.predict(predict_set['data'])
+    # print(predicted_svm)
+    target_names = joblib.load('train_set.pkl')['target_names']
+    index_classification = math.floor(np.mean(predicted_svm))
+    return index_classification, target_names[index_classification]
 
-text_mnb_stemmed = text_mnb_stemmed.fit(twenty_train.data, twenty_train.target)
+def load_file(filePath):
+    with io.open(filePath, mode="r", encoding="UTF8") as file:
+        return file.read().lower()
 
-predicted_mnb_stemmed = text_mnb_stemmed.predict(twenty_test.data)
-
-print np.mean(predicted_mnb_stemmed == twenty_test.target)
-
-
-# In[ ]:
 
 
