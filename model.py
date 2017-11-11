@@ -117,9 +117,9 @@ def predict(predict_set):
     # print(predicted_svm[0][0])
 
     for index in range(len(predicted_svm[0])):
-        names_predict_output.append({'index': index, 'score': predicted_svm[0][index], 'name': target_names[index]})
-    print(names_predict_output)
-
+        if(predicted_svm[0][index] >= 0.2):
+            names_predict_output.append({'index': index, 'score': predicted_svm[0][index], 'name': target_names[index]})
+    return names_predict_output
 
 
 
@@ -131,11 +131,11 @@ def load_file(filePath):
 
 # test()
 
-doc = load_file(
-    '/Volumes/DATA/workspace/vnu/spc/git/doit-classification/DataSource/Data_raw/train/KHTN/01050002682.txt')
-# print(doc)
-predict_set = load_text(doc)
-predict(predict_set)
+# doc = load_file(
+#     '/Volumes/DATA/workspace/vnu/spc/git/doit-classification/DataSource/Data_raw/train/KHTN/01050002682.txt')
+# # print(doc)
+# predict_set = load_text(doc)
+# predict(predict_set)
 # index_classification, target_name = predict(predict_set)
 # print(index_classification)
 # print(target_name)
